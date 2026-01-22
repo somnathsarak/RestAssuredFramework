@@ -1,0 +1,79 @@
+name: Selenium + TestNG Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    name: Run Selenium Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        java-version: ['17']
+        maven-version: ['3.8.1']
+    
+    steps:
+    # Checkout repository
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    # Setup JDK 17
+    - name: Set up JDK ${{ matrix.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ matrix.java-version }}
+        distribution: 'temurin'
+        cache: maven
+        
+    # Display Maven and Java versions
+    - name: Display versions
+      run: |
+        mvn -version
+        java -version
+        
+    # Run tests
+    - name: Run Selenium + TestNG tests
+      run: |
+        mvn clean test \
+          -DheadlessMode=true \
+          -Dorg.slf4j.simpleLogger.defaultLogLevel=info \
+          -Dorg.slf4j.simpleLogger.showDateTime=true
+          
+    # Generate test report
+    - name: Publish test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: surefire-reports
+        path: target/surefire-reports/
+        retention-days: 30
+        
+    # Upload screenshot on failure
+    - name: Upload screenshots on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: failure-screenshots
+        path: target/screenshots/
+        retention-days: 7
+        
+    # Publish test summary
+    - name: Publish test summary
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: target/surefire-reports/TEST-*.xml
+        check_name: Test Results
+        comment_mode: always
+        
+    # Notify on failure
+    - name: Notify on failure
+      if: failure()
+      run: echo "::error::Selenium tests failed! Check the logs for details."
